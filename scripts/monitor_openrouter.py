@@ -7,11 +7,16 @@ from dotenv import load_dotenv
 def check_openrouter_usage():
     load_dotenv()
     api_key = os.getenv("OPENROUTER_KEY")
+    if not api_key:
+        print("Error: OPENROUTER_KEY environment variable is not set.")
+        return
 
     headers = {"Authorization": f"Bearer {api_key}"}
 
     # Check current usage
-    response = requests.get("https://openrouter.ai/api/v1/auth/key", headers=headers)
+    response = requests.get(
+        "https://openrouter.ai/api/v1/auth/key", headers=headers, timeout=30
+    )
     if response.status_code == 200:
         data = response.json()
         print("API Key Info:")

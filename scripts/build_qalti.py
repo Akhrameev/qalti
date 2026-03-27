@@ -32,11 +32,11 @@ class Colors:
 
 def print_step(step_num, title, description=""):
     """Print a formatted step header"""
-    print(f"\n{Colors.HEADER}{'='*60}{Colors.ENDC}")
+    print(f"\n{Colors.HEADER}{'=' * 60}{Colors.ENDC}")
     print(f"{Colors.BOLD}Step {step_num}: {title}{Colors.ENDC}")
     if description:
         print(f"{Colors.CYAN}{description}{Colors.ENDC}")
-    print(f"{Colors.HEADER}{'='*60}{Colors.ENDC}\n")
+    print(f"{Colors.HEADER}{'=' * 60}{Colors.ENDC}\n")
 
 
 def run_command(cmd, description="", check=True, capture_output=False):
