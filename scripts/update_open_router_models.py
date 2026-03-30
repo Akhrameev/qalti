@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""
-Script to fetch available models from OpenRouter API and generate Swift code.
-Shows both free models and cheap vision models.
-"""
-
 import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import requests
+
+"""
+Script to fetch available models from OpenRouter API and generate Swift code.
+Shows both free models and cheap vision models.
+"""
 
 
 def ensure_output_dir() -> Path:
@@ -33,7 +33,7 @@ def fetch_models() -> list[dict[str, Any]]:
         return []
 
 
-def save_full_models_list(models: list[dict[str, Any]]) -> str:
+def save_full_models_list(models: list[dict[str, Any]]) -> Path:
     """Save the complete models list for investigation."""
     output_dir = ensure_output_dir()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -314,7 +314,7 @@ def generate_swift_enum_with_categories(
     seen: dict[str, int] = {}
     case_names = [to_swift_case_name(model["id"], seen) for model in suitable_models]
 
-    swift_code = f"""//"
+    swift_code = f"""//
 //  OpenRouterModels.swift
 //  Generated on {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 //
@@ -331,7 +331,6 @@ enum OpenRouterModel: String, CaseIterable {{
 
     // Vision models (free or very cheap)
 """
-
     for model, case_name in zip(suitable_models, case_names, strict=True):
         swift_code += f'    case {case_name} = "{model["id"]}"\n'
 

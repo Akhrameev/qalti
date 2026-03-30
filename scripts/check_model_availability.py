@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""
-Script to check availability of OpenRouter models by making test requests.
-"""
-
 import json
 import os
 import time
@@ -11,6 +7,10 @@ from typing import Any
 
 import requests
 from dotenv import load_dotenv
+
+"""
+Script to check availability of OpenRouter models by making test requests.
+"""
 
 
 def load_environment():
@@ -57,6 +57,11 @@ def get_openrouter_key() -> str:
     return api_key
 
 
+def get_http_referer() -> str:
+    """Get HTTP-Referer header value from environment or use default."""
+    return os.environ.get("OPENROUTER_REFERER", "https://github.com/qalti/aiqa")
+
+
 def test_model_availability(
     model_id: str, api_key: str, timeout: int = 30
 ) -> dict[str, Any]:
@@ -66,7 +71,7 @@ def test_model_availability(
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/pavelakhrameev/aiqa",  # Updated with your repo
+        "HTTP-Referer": get_http_referer(),
         "X-Title": "AIQA Model Availability Checker",
     }
 
@@ -150,7 +155,7 @@ def test_vision_capability(
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/pavelakhrameev/aiqa",
+        "HTTP-Referer": get_http_referer(),
         "X-Title": "AIQA Vision Capability Checker",
     }
 

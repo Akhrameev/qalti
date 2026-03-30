@@ -75,7 +75,7 @@ Prerequisites:
 
 - macOS
 - Xcode 16.4+
-- Python 3.x
+- Python 3.10 or higher (required)
 
 **Recommended - Automated Build:**
 

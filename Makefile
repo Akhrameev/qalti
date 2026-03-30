@@ -76,15 +76,15 @@ xcode-fast:
 # Create virtual environment and install tools
 .PHONY: venv
 venv: $(VENV_DIR)
-	$(VENV_PIP) install ruff
+	$(VENV_PIP) install ruff requests python-dotenv
 	@echo "$(BOLD)$(CYAN)💡 To activate: source $(VENV_DIR)/bin/activate$(NC)"
 
 $(VENV_DIR):
 	@echo "$(BOLD)$(CYAN)🔧 Creating Python virtual environment...$(NC)"
 	$(PYTHON) -m venv $(VENV_DIR)
-	@echo "$(CYAN)📦 Installing ruff...$(NC)"
+	@echo "$(CYAN)📦 Installing dependencies...$(NC)"
 	$(VENV_PIP) install --upgrade pip
-	$(VENV_PIP) install ruff
+	$(VENV_PIP) install ruff requests python-dotenv
 	@echo "$(BOLD)$(GREEN)✅ Virtual environment ready$(NC)"
 
 # Format code with ruff
