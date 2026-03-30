@@ -88,7 +88,7 @@ make first-run    # First-time setup with permission guidance
 The Makefile automation handles:
 
 - Python virtual environment setup
-- Code formatting (black) and linting (flake8)
+- Code formatting and linting with ruff
 - xcpretty/xcbeautify tool installation
 - macOS permission troubleshooting
 - App building and launching

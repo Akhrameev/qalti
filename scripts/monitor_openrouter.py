@@ -7,11 +7,9 @@ from dotenv import load_dotenv
 
 def check_openrouter_usage():
     load_dotenv()
-    api_key = os.getenv("OPENROUTER_KEY") or os.getenv("OPENROUTER_API_KEY")
+    api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
-        print(
-            "Error: neither OPENROUTER_KEY nor OPENROUTER_API_KEY environment variable is set."
-        )
+        print("Error: OPENROUTER_API_KEY environment variable is not set.")
         return
 
     headers = {"Authorization": f"Bearer {api_key}"}

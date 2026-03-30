@@ -40,20 +40,19 @@ def load_suitable_models(file_path: str) -> list[dict[str, Any]]:
 
 def get_openrouter_key() -> str:
     """Get OpenRouter API key from environment."""
-    # Try different environment variable names
-    api_key = os.environ.get("OPENROUTER_KEY")  # Your .env file uses this
-    if not api_key:
-        api_key = os.environ.get("OPENROUTER_API_KEY")  # Common alternative
+    api_key = os.environ.get(
+        "OPENROUTER_API_KEY"
+    )  # Prefer the public/CI standard variable name
 
     if not api_key:
-        print("❌ No OpenRouter API key found!")
-        print("Make sure your .env file contains: OPENROUTER_KEY=your_key_here")
-        print("Or set OPENROUTER_KEY environment variable")
+        print("\u274c No OpenRouter API key found!")
+        print("Make sure your .env file contains: OPENROUTER_API_KEY=your_key_here")
+        print("Or set OPENROUTER_API_KEY environment variable")
         return ""
 
     # Mask the key for display
     masked_key = api_key[:8] + "..." + api_key[-8:] if len(api_key) > 16 else "***"
-    print(f"✅ Using API key: {masked_key}")
+    print(f"\u2705 Using API key: {masked_key}")
     return api_key
 
 
