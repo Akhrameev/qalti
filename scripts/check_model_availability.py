@@ -207,14 +207,19 @@ def test_vision_capability(
 
         return result
 
-    except Exception as e:
+    except requests.exceptions.Timeout:
         return {
             "model_id": model_id,
             "vision_capable": False,
-            "response_time_ms": (
-                timeout * 1000 if isinstance(e, requests.exceptions.Timeout) else None
-            ),
-            "error": str(e),
+            "response_time_ms": timeout * 1000,
+            "error": "Request timeout",
+        }
+    except requests.exceptions.RequestException as e:
+        return {
+            "model_id": model_id,
+            "vision_capable": False,
+            "response_time_ms": None,
+            "error": f"Request failed: {str(e)}",
         }
 
 

@@ -1,5 +1,3 @@
-import argparse
-
 #!/usr/bin/env python3
 import json
 from datetime import datetime
@@ -70,83 +68,41 @@ def analyze_models(models: list[dict[str, Any]]):
 
     # Check for vision indicators
     vision_indicators = []
-    parser = argparse.ArgumentParser(
-        description="Fetch OpenRouter models and generate Swift code."
-    )
-    parser.add_argument(
-        "--analyze-models",
-        action="store_true",
-        help="Print model structure and vision-capable models analysis.",
-    )
-    parser.add_argument(
-        "--analyze-free-models",
-        action="store_true",
-        help="Print analysis of truly free models.",
-    )
-    args = parser.parse_args()
-
-    print("Fetching OpenRouter models...")
-    models = fetch_models()
-    print(f"Found {len(models)} total models")
-
-    if not models:
-        print("No models fetched. Exiting.")
-        return
-
-    if args.analyze_models:
-        analyze_models(models)
-        return
-
-    if args.analyze_free_models:
-        analyze_free_models(models)
-        return
-
-    # Save full models list
-    save_full_models_list(models)
-
-    # Categorize models
-    categories = filter_models_by_category(models)
-
-    print("\n=== FINAL RESULTS ===")
-    print(f"Free vision models: {len(categories['free_vision'])}")
-    print(f"Cheap vision models: {len(categories['cheap_vision'])}")
-    print(f"Free text-only models: {len(categories['free_text_only'])}")
-
-    if categories["free_vision"]:
-        print("\n🎉 Free vision models found:")
-        for model in categories["free_vision"]:
-            print(f"  - {model['id']} ({model['name']})")
-    else:
-        print("\n⚠️ No free vision models found. Using cheapest vision models:")
-        cheap_sorted = sorted(
-            categories["cheap_vision"],
-            key=lambda x: x["prompt_cost"] + x["completion_cost"],
+    vision_keywords = ["vision", "multimodal", "image", "visual", "gpt-4v", "claude-3"]
+    for model in models:
+        model_id = model.get("id", "")
+        model_name = model.get("name", "")
+        pricing = model.get("pricing", {})
+        prompt_cost = pricing.get("prompt")
+        completion_cost = pricing.get("completion")
+        is_free = prompt_cost == "0" or prompt_cost == 0
+        architecture = model.get("architecture", {})
+        modality = architecture.get("modality", "") if architecture else ""
+        has_vision_keyword = any(
+            keyword in model_id.lower() or keyword in model_name.lower()
+            for keyword in vision_keywords
         )
-        for model in cheap_sorted[:5]:
-            total_cost = model["prompt_cost"] + model["completion_cost"]
-            print(f"  - {model['id']} (~${total_cost * 1000:.4f}/1K tokens)")
-
-    # Generate Swift code
-    swift_code = generate_swift_enum_with_categories(categories)
-
-    # Save Swift file
-    output_file = (
-        Path(__file__).resolve().parent.parent
-        / "xcodeproject/Qalti/Services/UIHelpers/OpenRouterModels.swift"
-    )
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_file, "w") as f:
-        f.write(swift_code)
-    print(f"\nSwift enum generated: {output_file}")
-
-    # Save categorized data
-    save_categorized_data(categories)
-    print("\nAll intermediate files saved to scripts/output/")
+        if (
+            has_vision_keyword
+            or "multimodal" in modality.lower()
+            or "image" in modality.lower()
+        ):
+            vision_indicators.append(
+                {
+                    "id": model_id,
+                    "name": model_name,
+                    "modality": modality,
+                    "prompt_cost": prompt_cost,
+                    "completion_cost": completion_cost,
+                    "is_free": is_free,
+                    "architecture": architecture,
+                }
+            )
+    print(f"Total models: {len(models)}")
     print(f"Models with vision keywords: {len(vision_indicators)}")
-
     if vision_indicators:
         print("\nVision-capable models found:")
-        for i, model in enumerate(vision_indicators[:10]):  # Show first 10
+        for i, model in enumerate(vision_indicators[:10]):
             print(f"  {i + 1}. {model['id']}")
             print(f"     Name: {model['name']}")
             print(f"     Modality: {model['modality']}")
@@ -155,10 +111,8 @@ def analyze_models(models: list[dict[str, Any]]):
             )
             print(f"     Free: {model['is_free']}")
             print()
-
         if len(vision_indicators) > 10:
             print(f"     ... and {len(vision_indicators) - 10} more")
-
     return vision_indicators
 
 
