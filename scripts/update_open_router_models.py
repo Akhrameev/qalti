@@ -54,7 +54,7 @@ def save_full_models_list(models: list[dict[str, Any]]) -> Path:
     return filename
 
 
-def analyze_models(models: list[dict[str, Any]]):
+def analyze_models(models: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Analyze models to understand their structure and find vision-capable ones."""
     print("\n=== MODEL ANALYSIS ===")
 
@@ -73,9 +73,13 @@ def analyze_models(models: list[dict[str, Any]]):
         model_id = model.get("id", "")
         model_name = model.get("name", "")
         pricing = model.get("pricing", {})
-        prompt_cost = pricing.get("prompt")
-        completion_cost = pricing.get("completion")
-        is_free = prompt_cost == "0" or prompt_cost == 0
+        try:
+            prompt_cost = float(pricing.get("prompt") or 0)
+            completion_cost = float(pricing.get("completion") or 0)
+        except (ValueError, TypeError):
+            prompt_cost = 0.0
+            completion_cost = 0.0
+        is_free = prompt_cost == 0.0
         architecture = model.get("architecture", {})
         modality = architecture.get("modality", "") if architecture else ""
         has_vision_keyword = any(

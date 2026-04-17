@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import json
 import os
 import time
@@ -58,7 +59,7 @@ def get_openrouter_key() -> str:
 
 def get_http_referer() -> str:
     """Get HTTP-Referer header value from environment or use default."""
-    return os.environ.get("OPENROUTER_REFERER", "https://github.com/qalti/aiqa")
+    return os.environ.get("OPENROUTER_REFERER", "https://github.com/qalti/qalti")
 
 
 def test_model_availability(
@@ -130,7 +131,7 @@ def test_model_availability(
             "model_id": model_id,
             "status_code": None,
             "available": False,
-            "response_time_ms": timeout * 1000,
+            "response_time_ms": round((time.time() - start_time) * 1000, 2),
             "error": "Request timeout",
             "response_data": None,
         }
@@ -211,7 +212,7 @@ def test_vision_capability(
         return {
             "model_id": model_id,
             "vision_capable": False,
-            "response_time_ms": timeout * 1000,
+            "response_time_ms": round((time.time() - start_time) * 1000, 2),
             "error": "Request timeout",
         }
     except requests.exceptions.RequestException as e:
@@ -257,8 +258,6 @@ def save_results(results: list[dict[str, Any]], output_dir: str):
 
 
 def main():
-    import argparse
-
     parser = argparse.ArgumentParser(description="Check OpenRouter model availability")
     parser.add_argument("json_file", help="Path to suitable models JSON file")
     parser.add_argument(
