@@ -12,7 +12,7 @@ import Logging
 /// Client-side Point Out implementation via OpenRouter.
 final class OpenRouterPointOutService: Loggable {
     private enum Constants {
-        static let model: String = "anthropic/claude-sonnet-4"
+        static let model: String = "anthropic/claude-sonnet-4.6"
         static let maxCompletionTokens: Int = 60
         static let temperature: Double = 0.0
         static let maxParseAttempts: Int = 3

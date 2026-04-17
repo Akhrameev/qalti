@@ -4,6 +4,7 @@ Script to fetch available models from OpenRouter API and generate Swift code.
 Shows both free models and cheap vision models.
 """
 
+import argparse
 import json
 from datetime import datetime
 from pathlib import Path
@@ -292,8 +293,30 @@ def to_swift_case_name(model_id: str, seen: dict[str, int]) -> str:
     return name
 
 
+DEFAULT_MODEL_ID = "anthropic/claude-sonnet-4.6"
+
+
+def find_model_data(
+    models: list[dict[str, Any]], model_id: str
+) -> dict[str, Any] | None:
+    """Look up a model by ID in the raw API models list."""
+    return next((m for m in models if m.get("id") == model_id), None)
+
+
+def extract_model_cost(model: dict[str, Any]) -> float:
+    """Return combined prompt+completion cost per 1K tokens from raw API model data."""
+    pricing = model.get("pricing", {})
+    try:
+        prompt = float(pricing.get("prompt") or 0)
+        completion = float(pricing.get("completion") or 0)
+    except (ValueError, TypeError):
+        return 0.0
+    return round((prompt + completion) * 1000, 6)
+
+
 def generate_swift_enum_with_categories(
     categories: dict[str, list[dict[str, Any]]],
+    all_models: list[dict[str, Any]],
 ) -> str:
     """Generate Swift enum with different model categories."""
 
@@ -301,6 +324,17 @@ def generate_swift_enum_with_categories(
 
     seen: dict[str, int] = {}
     case_names = [to_swift_case_name(model["id"], seen) for model in suitable_models]
+
+    default_raw = find_model_data(all_models, DEFAULT_MODEL_ID)
+    default_cost = extract_model_cost(default_raw) if default_raw else 0.0
+    default_name = (
+        default_raw.get("name", DEFAULT_MODEL_ID) if default_raw else DEFAULT_MODEL_ID
+    )
+    default_max_tokens = (
+        ((default_raw.get("top_provider") or {}).get("max_completion_tokens") or 60)
+        if default_raw
+        else 60
+    )
 
     swift_code = f"""//
 //  OpenRouterModels.swift
@@ -315,18 +349,18 @@ import Foundation
 
 enum OpenRouterModel: String, CaseIterable {{
     // Default model (paid)
-    case defaultModel = "anthropic/claude-3.5-sonnet"
+    case defaultModel = "{DEFAULT_MODEL_ID}"
 
     // Vision models (free or very cheap)
 """
     for model, case_name in zip(suitable_models, case_names, strict=True):
         swift_code += f'    case {case_name} = "{model["id"]}"\n'
 
-    swift_code += """
-    var displayName: String {
-        switch self {
+    swift_code += f"""
+    var displayName: String {{
+        switch self {{
         case .defaultModel:
-            return "Claude 3.5 Sonnet (Default - Paid)"
+            return "{default_name} (Default - Paid)"
 """
 
     for model, case_name in zip(suitable_models, case_names, strict=True):
@@ -337,13 +371,13 @@ enum OpenRouterModel: String, CaseIterable {{
         )
         swift_code += f'        case .{case_name}:\n            return "{model["name"]} ({cost_info})"\n'
 
-    swift_code += """        }
-    }
+    swift_code += f"""        }}
+    }}
 
-    var maxCompletionTokens: Int {
-        switch self {
+    var maxCompletionTokens: Int {{
+        switch self {{
         case .defaultModel:
-            return 60
+            return {default_max_tokens}
 """
 
     for model, case_name in zip(suitable_models, case_names, strict=True):
@@ -369,13 +403,13 @@ enum OpenRouterModel: String, CaseIterable {{
             f"        case .{case_name}:\n            return {str(is_free).lower()}\n"
         )
 
-    swift_code += """        }
-    }
+    swift_code += f"""        }}
+    }}
 
-    var estimatedCostPer1KTokens: Double {
-        switch self {
+    var estimatedCostPer1KTokens: Double {{
+        switch self {{
         case .defaultModel:
-            return 0.036  // Approximate for Claude 3.5 Sonnet
+            return {default_cost}
 """
 
     for model, case_name in zip(suitable_models, case_names, strict=True):
@@ -429,7 +463,54 @@ def save_categorized_data(categories: dict[str, list[dict[str, Any]]]):
     print(f"Suitable models saved: {suitable_file}")
 
 
+def load_confirmed_vision_ids(availability_results_path: str) -> set[str]:
+    """Load model IDs confirmed as vision-capable from a check_model_availability results file."""
+    try:
+        with open(availability_results_path) as f:
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"Error loading availability results: {e}")
+        return set()
+
+    confirmed = {
+        r["model_id"]
+        for r in data.get("results", [])
+        if r.get("available") and r.get("vision_capable")
+    }
+    print(
+        f"Loaded {len(confirmed)} confirmed vision-capable models from availability results"
+    )
+    return confirmed
+
+
+def filter_categories_by_availability(
+    categories: dict[str, list[dict[str, Any]]],
+    confirmed_ids: set[str],
+) -> dict[str, list[dict[str, Any]]]:
+    """Remove models not confirmed as available + vision-capable from categories."""
+    filtered = {
+        key: [m for m in models if m["id"] in confirmed_ids]
+        for key, models in categories.items()
+    }
+    for key in ("free_vision", "cheap_vision"):
+        removed = len(categories[key]) - len(filtered[key])
+        if removed:
+            print(f"  Removed {removed} unconfirmed models from {key}")
+    return filtered
+
+
 def main():
+    parser = argparse.ArgumentParser(
+        description="Fetch OpenRouter models and generate Swift enum"
+    )
+    parser.add_argument(
+        "--availability-results",
+        metavar="FILE",
+        help="Path to model_availability_test JSON from check_model_availability.py; "
+        "only models confirmed available+vision-capable will be included in Swift output",
+    )
+    args = parser.parse_args()
+
     print("Fetching OpenRouter models...")
     models = fetch_models()
     print(f"Found {len(models)} total models")
@@ -449,6 +530,20 @@ def main():
     print(f"Cheap vision models: {len(categories['cheap_vision'])}")
     print(f"Free text-only models: {len(categories['free_text_only'])}")
 
+    if args.availability_results:
+        print("\n=== FILTERING BY AVAILABILITY RESULTS ===")
+        confirmed_ids = load_confirmed_vision_ids(args.availability_results)
+        if confirmed_ids:
+            categories = filter_categories_by_availability(categories, confirmed_ids)
+            print(
+                f"Confirmed vision-capable models: {len(categories['free_vision'])} free, "
+                f"{len(categories['cheap_vision'])} cheap"
+            )
+        else:
+            print(
+                "⚠️  No confirmed models found — generating Swift without availability filter"
+            )
+
     if categories["free_vision"]:
         print("\n🎉 Free vision models found:")
         for model in categories["free_vision"]:
@@ -464,7 +559,7 @@ def main():
             print(f"  - {model['id']} (~${total_cost * 1000:.4f}/1K tokens)")
 
     # Generate Swift code
-    swift_code = generate_swift_enum_with_categories(categories)
+    swift_code = generate_swift_enum_with_categories(categories, models)
 
     # Save Swift file
     output_file = (

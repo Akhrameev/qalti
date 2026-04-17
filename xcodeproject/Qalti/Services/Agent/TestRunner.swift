@@ -40,12 +40,13 @@ class TestRunner: Loggable {
         case gpt41 = "openai/gpt-4.1"
         case gemini25pro = "google/gemini-2.5-pro"
         case claude4 = "anthropic/claude-sonnet-4"
+        case claude46 = "anthropic/claude-sonnet-4.6"
         case grok4 = "x-ai/grok-4"
         case gpt5mini = "openai/gpt-5-mini"
         case gpt5 = "openai/gpt-5"
         case gpt5nano = "openai/gpt-5-nano"
         case claudeHaiku45 = "anthropic/claude-haiku-4.5"
-        case gemini3proPreview = "google/gemini-3-pro-preview"
+        case gemini31proPreview = "google/gemini-3.1-pro-preview"
         case gemini3flashPreview = "google/gemini-3-flash-preview"
         case gemini3proImagePreview = "google/gemini-3-pro-image-preview"
 
@@ -53,7 +54,7 @@ class TestRunner: Loggable {
             return [
                 .gpt41,
                 .gemini25pro,
-                .gemini3proPreview,
+                .gemini31proPreview,
                 .gemini3flashPreview,
                 .claude4,
                 .claudeHaiku45,
@@ -70,7 +71,7 @@ class TestRunner: Loggable {
             switch self {
             case .grok4:
                 return "Grok 4"
-            case .gemini3proPreview:
+            case .gemini31proPreview:
                 return "Gemini 3 Pro (preview)"
             case .gemini3flashPreview:
                 return "Gemini 3 Flash (preview)"
@@ -88,6 +89,8 @@ class TestRunner: Loggable {
                 return "Gemini 2.5 Pro"
             case .claude4:
                 return "Claude 4 Sonnet"
+            case .claude46:
+                return "Claude 4.6 Sonnet"
             case .claudeHaiku45:
                 return "Claude 4.5 Haiku"
             }
@@ -98,7 +101,7 @@ class TestRunner: Loggable {
             case .gpt5:
                 // GPT-5 benefits from constrained reasoning by default.
                 return .low
-            case .gemini3proPreview, .gemini3flashPreview:
+            case .gemini31proPreview, .gemini3flashPreview:
                 // Enable reasoning for Gemini 3 models (OpenRouter expects this via reasoning.effort).
                 return .low
             default:
@@ -107,7 +110,7 @@ class TestRunner: Loggable {
         }
 
         var separateImageAndText: Bool {
-            return self == .gemini3proPreview || self == .gemini3flashPreview || self == .gemini3proImagePreview
+            return self == .gemini31proPreview || self == .gemini3flashPreview || self == .gemini3proImagePreview
         }
 
         // Convenience initializer that maps common inputs/aliases to a known model
@@ -125,14 +128,16 @@ class TestRunner: Loggable {
                 self = .gpt41
             case "gemini 2.5 pro", "gemini-2.5-pro":
                 self = .gemini25pro
-            case "gemini 3 pro", "gemini-3-pro", "gemini-3-pro-preview":
-                self = .gemini3proPreview
+            case "gemini 3 pro", "gemini-3-pro", "gemini-3-pro-preview", "gemini 3.1 pro", "gemini-3.1-pro", "gemini-3.1-pro-preview":
+                self = .gemini31proPreview
             case "gemini 3 flash", "gemini-3-flash", "gemini-3-flash-preview":
                 self = .gemini3flashPreview
             case "gemini 3 pro image", "gemini-3-pro-image", "gemini-3-pro-image-preview":
                 self = .gemini3proImagePreview
-            case "claude 4 sonnet", "claude-4-sonnet", "claude4":
+            case "claude 4 sonnet", "claude-4-sonnet", "claude4", "claude-sonnet-4":
                 self = .claude4
+            case "claude 4.6 sonnet", "claude-4.6-sonnet", "claude46", "claude-sonnet-4.6":
+                self = .claude46
             case "grok-4", "grok 4", "grok4":
                 self = .grok4
             case "claude haiku 4.5", "claude-haiku-4.5", "haiku 4.5", "haiku-4.5":

@@ -4,9 +4,12 @@ Script to check availability of OpenRouter models by making test requests.
 """
 
 import argparse
+import base64
 import json
 import os
+import struct
 import time
+import zlib
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -58,6 +61,27 @@ def get_openrouter_key() -> str:
     return api_key
 
 
+def make_test_image_base64(width: int = 32, height: int = 32) -> str:
+    """Generate a small valid PNG (solid red) using only stdlib."""
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        payload = tag + data
+        return (
+            struct.pack(">I", len(data))
+            + payload
+            + struct.pack(">I", zlib.crc32(payload) & 0xFFFFFFFF)
+        )
+
+    raw = b"".join(b"\x00" + b"\xff\x00\x00" * width for _ in range(height))
+    png = (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(raw))
+        + chunk(b"IEND", b"")
+    )
+    return base64.b64encode(png).decode()
+
+
 def get_http_referer() -> str:
     """Get HTTP-Referer header value from environment or use default."""
     return os.environ.get("OPENROUTER_REFERER", "https://github.com/qalti/qalti")
@@ -76,11 +100,11 @@ def test_model_availability(
         "X-Title": "AIQA Model Availability Checker",
     }
 
-    # Minimal test payload
+    # Minimal test payload — 16 tokens is the minimum accepted by OpenAI models
     payload = {
         "model": model_id,
         "messages": [{"role": "user", "content": "Hi"}],
-        "max_tokens": 1,
+        "max_tokens": 16,
         "temperature": 0,
     }
 
@@ -119,9 +143,11 @@ def test_model_availability(
         else:
             try:
                 error_data = response.json()
-                result["error"] = error_data.get("error", {}).get(
-                    "message", f"HTTP {response.status_code}"
-                )
+                error_obj = error_data.get("error", {})
+                message = error_obj.get("message", f"HTTP {response.status_code}")
+                # OpenRouter wraps provider errors in metadata.raw
+                raw = error_obj.get("metadata", {}).get("raw")
+                result["error"] = f"{message} | {raw}" if raw else message
             except Exception:
                 result["error"] = f"HTTP {response.status_code}"
 
@@ -160,8 +186,8 @@ def test_vision_capability(
         "X-Title": "AIQA Vision Capability Checker",
     }
 
-    # Test with a simple image (1x1 pixel PNG base64)
-    tiny_image_base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChAGA6dx7HAAAAABJRU5ErkJggg=="
+    # 32x32 solid red PNG — large enough for Google's API (1x1 is rejected)
+    tiny_image_base64 = make_test_image_base64()
 
     payload = {
         "model": model_id,
@@ -191,6 +217,7 @@ def test_vision_capability(
         result = {
             "model_id": model_id,
             "vision_capable": False,
+            "status_code": response.status_code,
             "response_time_ms": round(elapsed * 1000, 2),
             "error": None,
         }
@@ -200,10 +227,11 @@ def test_vision_capability(
         else:
             try:
                 error_data = response.json()
-                error_message = error_data.get("error", {}).get(
-                    "message", f"HTTP {response.status_code}"
-                )
-                result["error"] = error_message
+                error_obj = error_data.get("error", {})
+                message = error_obj.get("message", f"HTTP {response.status_code}")
+                raw = error_obj.get("metadata", {}).get("raw")
+                detail = f"{message} | {raw}" if raw else message
+                result["error"] = f"HTTP {response.status_code}: {detail}"
             except Exception:
                 result["error"] = f"HTTP {response.status_code}"
 
@@ -213,6 +241,7 @@ def test_vision_capability(
         return {
             "model_id": model_id,
             "vision_capable": False,
+            "status_code": None,
             "response_time_ms": round((time.time() - start_time) * 1000, 2),
             "error": "Request timeout",
         }
@@ -220,6 +249,7 @@ def test_vision_capability(
         return {
             "model_id": model_id,
             "vision_capable": False,
+            "status_code": None,
             "response_time_ms": None,
             "error": f"Request failed: {str(e)}",
         }
@@ -258,6 +288,38 @@ def save_results(results: list[dict[str, Any]], output_dir: str):
     return filename
 
 
+def enrich_models_with_pricing(
+    models: list[dict[str, Any]], full_models_path: str
+) -> list[dict[str, Any]]:
+    """Fill in prompt_cost/completion_cost from a full OpenRouter models JSON."""
+    try:
+        with open(full_models_path) as f:
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"Warning: could not load full models file for enrichment: {e}")
+        return models
+
+    index = {m["id"]: m for m in data.get("models", [])}
+    enriched = 0
+    for model in models:
+        raw = index.get(model["id"])
+        if not raw:
+            continue
+        pricing = raw.get("pricing", {})
+        try:
+            model["prompt_cost"] = float(pricing.get("prompt") or 0)
+            model["completion_cost"] = float(pricing.get("completion") or 0)
+            if not model.get("name"):
+                model["name"] = raw.get("name", model["id"])
+            enriched += 1
+        except (ValueError, TypeError):
+            pass
+    print(
+        f"Enriched {enriched}/{len(models)} models with pricing from {full_models_path}"
+    )
+    return models
+
+
 def main():
     parser = argparse.ArgumentParser(description="Check OpenRouter model availability")
     parser.add_argument("json_file", help="Path to suitable models JSON file")
@@ -271,6 +333,11 @@ def main():
         "--timeout", type=int, default=30, help="Request timeout in seconds"
     )
     parser.add_argument("--max-models", type=int, help="Limit number of models to test")
+    parser.add_argument(
+        "--enrich-from",
+        metavar="FILE",
+        help="Path to openrouter_models_full JSON to fill in accurate pricing",
+    )
 
     args = parser.parse_args()
 
@@ -282,6 +349,10 @@ def main():
     if not models:
         print("No models to test")
         return
+
+    # Enrich with pricing if requested
+    if args.enrich_from:
+        models = enrich_models_with_pricing(models, args.enrich_from)
 
     # Limit models if requested
     if args.max_models and args.max_models < len(models):
@@ -334,7 +405,10 @@ def main():
                         f"    ❌ Vision failed: {vision_result.get('error', 'Unknown')}"
                     )
         else:
-            print(f"  ❌ Not available: {availability_result.get('error', 'Unknown')}")
+            status = availability_result.get("status_code")
+            error = availability_result.get("error", "Unknown")
+            status_str = f" [HTTP {status}]" if status else ""
+            print(f"  ❌ Not available: {error}{status_str}")
 
         results.append(result)
 
