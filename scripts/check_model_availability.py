@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
+"""
+Script to check availability of OpenRouter models by making test requests.
+"""
+
 import argparse
 import json
 import os
 import time
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import requests
 from dotenv import load_dotenv
-
-"""
-Script to check availability of OpenRouter models by making test requests.
-"""
 
 
 def load_environment():
@@ -101,8 +102,8 @@ def test_model_availability(
             result["available"] = True
             try:
                 result["response_data"] = response.json()
-            except Exception:
-                pass
+            except ValueError as e:
+                result["error"] = f"Failed to parse response JSON: {e}"
         elif response.status_code == 401:
             result["error"] = "Authentication failed"
         elif response.status_code == 402:
@@ -342,7 +343,7 @@ def main():
             time.sleep(args.delay)
 
     # Save results
-    output_dir = "scripts/output"
+    output_dir = str(Path(__file__).resolve().parent / "output")
     results_file = save_results(results, output_dir)
 
     # Print summary

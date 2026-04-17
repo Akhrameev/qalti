@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
+"""
+Script to fetch available models from OpenRouter API and generate Swift code.
+Shows both free models and cheap vision models.
+"""
+
 import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import requests
-
-"""
-Script to fetch available models from OpenRouter API and generate Swift code.
-Shows both free models and cheap vision models.
-"""
 
 
 def ensure_output_dir() -> Path:
@@ -127,10 +127,12 @@ def analyze_free_models(models: list[dict[str, Any]]):
     free_models = []
     for model in models:
         pricing = model.get("pricing", {})
-        prompt_cost = pricing.get("prompt")
+        try:
+            prompt_cost = float(pricing.get("prompt") or 0)
+        except (ValueError, TypeError):
+            prompt_cost = 0.0
 
-        # Check if truly free
-        is_free = prompt_cost == "0" or prompt_cost == 0
+        is_free = prompt_cost == 0.0
         if is_free:
             architecture = model.get("architecture", {})
             modality = architecture.get("modality", "") if architecture else ""
@@ -257,6 +259,21 @@ def filter_models_by_category(
     }
 
 
+def select_suitable_models(
+    categories: dict[str, list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    """Select suitable models: all free vision, plus cheapest paid vision if fewer than 5."""
+    suitable = categories["free_vision"].copy()
+    if len(suitable) < 5:
+        cheap_sorted = sorted(
+            categories["cheap_vision"],
+            key=lambda x: x["prompt_cost"] + x["completion_cost"],
+        )
+        needed = min(10 - len(suitable), len(cheap_sorted))
+        suitable.extend(cheap_sorted[:needed])
+    return suitable
+
+
 def to_swift_case_name(model_id: str, seen: dict[str, int]) -> str:
     name = (
         model_id.replace("/", "_")
@@ -280,18 +297,7 @@ def generate_swift_enum_with_categories(
 ) -> str:
     """Generate Swift enum with different model categories."""
 
-    # Combine free vision (priority) + some cheap vision models
-    suitable_models = categories["free_vision"].copy()
-
-    # Add some of the cheapest vision models if we have few free vision models
-    if len(suitable_models) < 5:
-        # Sort cheap vision by total cost and take top models to reach ~10 total
-        cheap_sorted = sorted(
-            categories["cheap_vision"],
-            key=lambda x: x["prompt_cost"] + x["completion_cost"],
-        )
-        needed = min(10 - len(suitable_models), len(cheap_sorted))
-        suitable_models.extend(cheap_sorted[:needed])
+    suitable_models = select_suitable_models(categories)
 
     seen: dict[str, int] = {}
     case_names = [to_swift_case_name(model["id"], seen) for model in suitable_models]
@@ -408,14 +414,7 @@ def save_categorized_data(categories: dict[str, list[dict[str, Any]]]):
     print(f"Categorized model data saved: {categorized_file}")
 
     # Save just the suitable models for easier reference
-    suitable_models = categories["free_vision"].copy()
-    if len(suitable_models) < 5:
-        cheap_sorted = sorted(
-            categories["cheap_vision"],
-            key=lambda x: x["prompt_cost"] + x["completion_cost"],
-        )
-        needed = min(10 - len(suitable_models), len(cheap_sorted))
-        suitable_models.extend(cheap_sorted[:needed])
+    suitable_models = select_suitable_models(categories)
 
     suitable_file = output_dir / f"openrouter_suitable_models_{timestamp}.json"
     with open(suitable_file, "w") as f:
