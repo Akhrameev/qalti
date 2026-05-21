@@ -70,12 +70,14 @@ class IOSAgent: Loggable {
         private var _insufficientBalance: Bool = false
         private var _authenticationFailed: Bool = false
         private var _timeout: Bool = false
+        private var _rateLimited: Bool = false
         private var _lastStatusCode: Int? = nil
         private var _lastErrorBody: String? = nil
 
         var insufficientBalance: Bool { stateQueue.sync { _insufficientBalance } }
         var authenticationFailed: Bool { stateQueue.sync { _authenticationFailed } }
         var timeout: Bool { stateQueue.sync { _timeout } }
+        var rateLimited: Bool { stateQueue.sync { _rateLimited } }
         var lastStatusCode: Int? { stateQueue.sync { _lastStatusCode } }
         var lastErrorBody: String? { stateQueue.sync { _lastErrorBody } }
 
@@ -94,6 +96,9 @@ class IOSAgent: Loggable {
             case 504:
                 stateQueue.sync { _timeout = true }
                 return (response, nil)
+            case 429:
+                stateQueue.sync { _rateLimited = true }
+                return (response, data)
             case 402:
                 stateQueue.sync { _insufficientBalance = true }
                 return (response, nil)
@@ -304,14 +309,20 @@ class IOSAgent: Loggable {
         maxRetries: Int
     ) throws -> StreamedAssistantResult {
         // We count "retries" excluding the initial attempt, so total attempts = maxRetries + 1.
+        var lastErrorStatusCode: Int? = nil
         for attempt in 0...maxRetries {
             if attempt > 0 {
-                // 1st retry right away, 2nd after small delay, 3rd after bigger delay.
                 let delay: TimeInterval
-                switch attempt {
-                case 1: delay = 0.0
-                case 2: delay = 1.0
-                default: delay = 5.0
+                if lastErrorStatusCode == 429 {
+                    // Free-tier rate limits reset on a per-minute window; wait long enough to clear it.
+                    delay = 60.0
+                } else {
+                    // 1st retry right away, 2nd after small delay, 3rd after bigger delay.
+                    switch attempt {
+                    case 1: delay = 0.0
+                    case 2: delay = 1.0
+                    default: delay = 5.0
+                    }
                 }
                 logger.info("Retrying LLM request (retry #\(attempt) of \(maxRetries)) after previous failure. Delay before retry: \(delay)s")
                 if delay > 0 { Thread.sleep(forTimeInterval: delay) }
@@ -328,6 +339,15 @@ class IOSAgent: Loggable {
             } catch {
                 errorCapturer.capture(error: error)
                 var effectiveError: Swift.Error = error
+
+                // Extract HTTP status code directly from OpenAIError — middleware intercept is
+                // not reliably called for streaming failures, so we can't rely on lastStatusCode.
+                if let openAIError = error as? OpenAIError,
+                   case .statusError(_, let statusCode) = openAIError {
+                    lastErrorStatusCode = statusCode
+                } else {
+                    lastErrorStatusCode = preparedQuery.errorCheckingMiddleware.lastStatusCode
+                }
 
                 let nsError = error as NSError
                 if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled {
