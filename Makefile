@@ -36,6 +36,7 @@ help:
 	@echo "$(BOLD)Development:$(NC)"
 	@echo "  $(GREEN)format$(NC)         - Format Python code with ruff"
 	@echo "  $(GREEN)lint$(NC)           - Lint Python code with ruff"
+	@echo "  $(GREEN)test-python$(NC)    - Run Python unit tests with pytest"
 	@echo "  $(MAGENTA)reset-permissions$(NC) - Reset folder access permissions"
 	@echo ""
 	@echo "$(BOLD)Utilities:$(NC)"
@@ -76,7 +77,7 @@ xcode-fast:
 # Create virtual environment and install tools
 .PHONY: venv
 venv: $(VENV_DIR)
-	$(VENV_PIP) install ruff requests python-dotenv
+	$(VENV_PIP) install ruff requests python-dotenv pytest
 	@echo "$(BOLD)$(CYAN)💡 To activate: source $(VENV_DIR)/bin/activate$(NC)"
 
 $(VENV_DIR):
@@ -84,7 +85,7 @@ $(VENV_DIR):
 	$(PYTHON) -m venv $(VENV_DIR)
 	@echo "$(CYAN)📦 Installing dependencies...$(NC)"
 	$(VENV_PIP) install --upgrade pip
-	$(VENV_PIP) install ruff requests python-dotenv
+	$(VENV_PIP) install ruff requests python-dotenv pytest
 	@echo "$(BOLD)$(GREEN)✅ Virtual environment ready$(NC)"
 
 # Format code with ruff
@@ -101,6 +102,13 @@ lint: $(VENV_DIR)
 	$(VENV_BIN)/ruff check $(SCRIPTS_DIR)
 	$(VENV_BIN)/ruff format --check $(SCRIPTS_DIR)
 	@echo "$(GREEN)✅ Linting complete$(NC)"
+
+# Run Python unit tests with pytest
+.PHONY: test-python
+test-python: $(VENV_DIR)
+	@echo "$(BOLD)$(GREEN)🧪 Running Python tests...$(NC)"
+	$(VENV_BIN)/python -m pytest $(SCRIPTS_DIR)/tests
+	@echo "$(GREEN)✅ Tests complete$(NC)"
 
 # First-time setup with guidance
 .PHONY: first-run
