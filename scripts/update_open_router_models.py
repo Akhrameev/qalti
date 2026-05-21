@@ -330,11 +330,17 @@ def generate_swift_enum_with_categories(
     default_name = (
         default_raw.get("name", DEFAULT_MODEL_ID) if default_raw else DEFAULT_MODEL_ID
     )
-    default_max_tokens = (
-        ((default_raw.get("top_provider") or {}).get("max_completion_tokens") or 60)
-        if default_raw
-        else 60
-    )
+    if default_raw:
+        default_top_provider = default_raw.get("top_provider") or {}
+        default_context_length = default_raw.get("context_length") or 0
+        default_max_tokens = (
+            default_top_provider.get("max_completion_tokens")
+            or default_context_length
+            or 4096
+        )
+    else:
+        default_context_length = 0
+        default_max_tokens = 4096
 
     swift_code = f"""//
 //  OpenRouterModels.swift
@@ -381,8 +387,23 @@ enum OpenRouterModel: String, CaseIterable {{
 """
 
     for model, case_name in zip(suitable_models, case_names, strict=True):
-        max_tokens = model.get("max_completion_tokens") or 60
+        max_tokens = (
+            model.get("max_completion_tokens") or model.get("context_length") or 4096
+        )
         swift_code += f"        case .{case_name}:\n            return {max_tokens}\n"
+
+    swift_code += f"""        }}
+    }}
+
+    var contextLength: Int {{
+        switch self {{
+        case .defaultModel:
+            return {default_context_length or 4096}
+"""
+
+    for model, case_name in zip(suitable_models, case_names, strict=True):
+        ctx_len = model.get("context_length") or 4096
+        swift_code += f"        case .{case_name}:\n            return {ctx_len}\n"
 
     swift_code += """        }
     }
