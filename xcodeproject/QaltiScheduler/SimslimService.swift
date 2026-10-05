@@ -25,7 +25,7 @@ enum SimslimService {
     /// Slims already-booted worker simulators in place, best-effort. Does nothing if `enabled`
     /// is false or the binary can't be found; a per-device failure is logged and skipped rather
     /// than aborting the run, since a worker that stays stock is still usable.
-    static func slimWorkersIfRequested(udids: [String], enabled: Bool, verbose: Bool) {
+    static func slimWorkersIfRequested(udids: [String], enabled: Bool) {
         guard enabled else { return }
         guard let binary = locateBinary() else {
             Log.i("[Scheduler] --slim-workers was set but the simslim binary was not found (checked QALTI_SIMSLIM_PATH and PATH); continuing with stock simulators")

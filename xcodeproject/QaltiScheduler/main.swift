@@ -154,7 +154,7 @@ struct QaltiScheduler: ParsableCommand {
             Log.v("[Scheduler] Cloned workers: \(workerUDIDs.joined(separator: ", "))")
 
             try SimctlService.bootSimulators(udids: workerUDIDs, verbose: verbose)
-            SimslimService.slimWorkersIfRequested(udids: workerUDIDs, enabled: slimWorkers, verbose: verbose)
+            SimslimService.slimWorkersIfRequested(udids: workerUDIDs, enabled: slimWorkers)
         }
 
         // Install termination cleanup (Ctrl+C etc.) after UDIDs are known
