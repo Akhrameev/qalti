@@ -9,10 +9,11 @@ enum SimslimService {
     /// Resolves the simslim binary path. Checks `QALTI_SIMSLIM_PATH` first (for pinning a
     /// specific build), then falls back to whatever `simslim` resolves to on PATH.
     static func locateBinary() -> String? {
-        if let pinned = ProcessInfo.processInfo.environment["QALTI_SIMSLIM_PATH"],
-           !pinned.isEmpty,
-           FileManager.default.isExecutableFile(atPath: pinned) {
-            return pinned
+        if let pinned = ProcessInfo.processInfo.environment["QALTI_SIMSLIM_PATH"], !pinned.isEmpty {
+            if FileManager.default.isExecutableFile(atPath: pinned) {
+                return pinned
+            }
+            Log.i("[Scheduler] QALTI_SIMSLIM_PATH=\(pinned) is not executable; falling back to PATH")
         }
         guard let (code, out, _) = try? ProcessUtils.runProcess("/usr/bin/which", ["simslim"]),
               code == 0 else {
@@ -32,16 +33,23 @@ enum SimslimService {
             return
         }
         Log.v("[Scheduler] Slimming \(udids.count) worker simulator(s) via \(binary)")
+        let slimmedCount = DispatchQueue(label: "com.qalti.simslim.count")
         var slimmed = 0
+        let group = DispatchGroup()
         for udid in udids {
-            let (code, _, err) = (try? ProcessUtils.runProcess(binary, ["on", "--no-reboot", udid])) ?? (-1, "", "simslim process failed to launch")
-            if code == 0 {
-                slimmed += 1
-                Log.v("[Scheduler] Slimmed \(udid)")
-            } else {
-                Log.i("[Scheduler] simslim failed on \(udid), leaving it stock: \(err.trimmingCharacters(in: .whitespacesAndNewlines))")
+            group.enter()
+            DispatchQueue.global(qos: .userInitiated).async {
+                defer { group.leave() }
+                let (code, _, err) = (try? ProcessUtils.runProcess(binary, ["on", "--no-reboot", udid])) ?? (-1, "", "simslim process failed to launch")
+                if code == 0 {
+                    slimmedCount.sync { slimmed += 1 }
+                    Log.v("[Scheduler] Slimmed \(udid)")
+                } else {
+                    Log.i("[Scheduler] simslim failed on \(udid), leaving it stock: \(err.trimmingCharacters(in: .whitespacesAndNewlines))")
+                }
             }
         }
+        group.wait()
         Log.i("[Scheduler] Slimmed \(slimmed)/\(udids.count) worker simulator(s)")
     }
 }
